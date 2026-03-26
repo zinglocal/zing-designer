@@ -1,0 +1,6 @@
+index.html
+.env
+.gitignore
+.claspignore
+README.md
+node_modules/**

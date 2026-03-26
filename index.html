@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZING Designer Performance Tracker</title>
+<style>
+:root {
+  --oxford:    #050536;
+  --turquoise: #34E1D2;
+  --purple:    #6407FA;
+  --blue:      #00AEFF;
+  --bg:        #f2f3f7;
+  --surface:   #ffffff;
+  --text:      #12122a;
+  --muted:     #6b7185;
+  --border:    rgba(5,5,54,0.1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  background: var(--oxford);
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.header-left { display: flex; align-items: center; gap: 1rem; }
+.logo { color: var(--turquoise); font-size: 1.375rem; font-weight: 800; letter-spacing: 0.12em; }
+.header-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.15); }
+.header-subtitle { color: rgba(255,255,255,0.5); font-size: 0.8125rem; }
+.header-context { color: rgba(255,255,255,0.4); font-size: 0.8125rem; text-align: right; }
+.header-context strong { color: rgba(255,255,255,0.8); font-weight: 600; display: block; }
+
+/* ── LAYOUT ── */
+.main { max-width: 860px; margin: 0 auto; padding: 1.75rem 1.5rem 3rem; }
+
+/* ── TABS ── */
+.tabs { display: flex; border-bottom: 1.5px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+.tab {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  border-bottom: 2.5px solid transparent;
+  margin-bottom: -1.5px;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+.tab:hover:not(.active) { color: var(--text); }
+
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 1.375rem;
+  margin-bottom: 1.125rem;
+}
+.card-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+/* ── FORMS ── */
+.setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 500px) { .setup-row { grid-template-columns: 1fr; } }
+
+label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.375rem; font-weight: 500; }
+input[type="text"], input[type="email"], input[type="number"], select, textarea {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.9375rem;
+  color: var(--text);
+  background: #fafafa;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--purple);
+  background: #fff;
+}
+input[type="number"] { font-variant-numeric: tabular-nums; }
+textarea { resize: vertical; line-height: 1.5; }
+.field-hint { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; }
+
+/* ── METRICS GRID ── */
+.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.875rem; }
+@media (max-width: 560px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── STATS ROW ── */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+@media (max-width: 560px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+.stat-chip { background: var(--bg); border-radius: 10px; padding: 0.875rem 0.75rem; text-align: center; }
+.stat-num  { font-size: 1.875rem; font-weight: 700; line-height: 1; }
+.stat-name { font-size: 0.7125rem; color: var(--muted); margin-top: 0.3rem; }
+
+/* ── PROGRESS BAR ── */
+.progress-row { margin: 0 0 1.25rem; }
+.progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem; }
+.progress-meta span:first-child { color: var(--text); font-weight: 500; }
+.progress-meta span:last-child  { color: var(--muted); }
+.bar-bg { background: #e4e6ef; border-radius: 99px; height: 9px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 99px; transition: width 0.45s cubic-bezier(0.4,0,0.2,1), background 0.3s; }
+.bar-marker {
+  position: absolute;
+  top: -3px; left: 50%;
+  transform: translateX(-50%);
+  width: 2px; height: 15px;
+  background: rgba(5,5,54,0.25);
+  border-radius: 1px;
+}
+.progress-foot { display: flex; justify-content: space-between; margin-top: 0.375rem; font-size: 0.7rem; color: var(--muted); }
+
+/* ── INCENTIVE BOX ── */
+.incentive-box {
+  border-radius: 12px;
+  padding: 1.25rem 1.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: background 0.3s;
+}
+.incentive-box.on  { background: var(--oxford); }
+.incentive-box.off { background: #f0f1f5; }
+.inc-label  { font-size: 0.8rem; margin-bottom: 0.2rem; }
+.inc-amount { font-size: 2.25rem; font-weight: 800; line-height: 1; }
+.inc-note   { font-size: 0.72rem; margin-top: 0.3rem; }
+.incentive-box.on  .inc-label  { color: rgba(255,255,255,0.55); }
+.incentive-box.on  .inc-amount { color: var(--turquoise); }
+.incentive-box.on  .inc-note   { color: rgba(255,255,255,0.45); }
+.incentive-box.off .inc-label  { color: var(--muted); }
+.incentive-box.off .inc-amount { color: #c0c3d4; }
+.incentive-box.off .inc-note   { color: var(--muted); }
+
+/* ── BADGES ── */
+.badge {
+  padding: 0.45rem 1rem;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge.yes     { background: var(--turquoise); color: var(--oxford); }
+.badge.no      { background: #fee2e2; color: #c0392b; }
+.badge.neutral { background: #e4e6ef; color: var(--muted); }
+
+/* ── BUTTONS ── */
+.btn-save {
+  width: 100%;
+  background: var(--purple);
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s, transform 0.1s;
+  font-family: inherit;
+}
+.btn-save:hover   { opacity: 0.92; }
+.btn-save:active  { transform: scale(0.99); }
+.btn-save:disabled { opacity: 0.5; cursor: default; }
+
+.btn-email {
+  width: 100%;
+  background: transparent;
+  color: var(--purple);
+  border: 2px solid var(--purple);
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  font-family: inherit;
+}
+.btn-email:hover   { background: var(--purple); color: white; }
+.btn-email:active  { transform: scale(0.99); }
+.btn-email:disabled { opacity: 0.5; cursor: default; }
+
+/* ── HISTORY ── */
+.hist-item {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  align-items: start;
+}
+.hist-item:last-child { border-bottom: none; }
+.hist-month     { font-weight: 700; font-size: 0.9375rem; color: var(--oxford); }
+.hist-meta      { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+.hist-notes     { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; font-style: italic; }
+.hist-incentive { font-weight: 800; font-size: 1.1rem; text-align: right; }
+.hist-incentive.earned { color: var(--purple); }
+.hist-incentive.zero   { color: #c0c3d4; }
+.hist-rate      { font-size: 0.75rem; color: var(--muted); text-align: right; margin-top: 0.2rem; }
+
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+@media (max-width: 500px) { .summary-grid { grid-template-columns: 1fr 1fr; } }
+
+/* ── TEAM TAB ── */
+.team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.team-row:last-child { border-bottom: none; }
+.team-name { font-weight: 600; font-size: 0.9375rem; }
+.team-stat { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+.team-right { display: flex; align-items: center; gap: 0.75rem; }
+.team-inc   { font-weight: 700; font-size: 0.9375rem; }
+.team-inc.pos  { color: var(--purple); }
+.team-inc.zero { color: #c0c3d4; }
+
+/* ── LOADING ── */
+.loading { text-align: center; color: var(--muted); padding: 3rem 1rem; font-size: 0.875rem; }
+.empty-state { text-align: center; color: var(--muted); padding: 2.5rem 1rem; font-size: 0.875rem; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 1.5rem; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--oxford);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 99px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 99;
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+  opacity: 0;
+  white-space: nowrap;
+  border: 1px solid rgba(52,225,210,0.3);
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">ZING</div>
+    <div class="header-divider"></div>
+    <div class="header-subtitle">Designer performance tracker</div>
+  </div>
+  <div class="header-context">
+    <strong id="hdr-month">—</strong>
+    <span id="hdr-status">Loading...</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="tabs" id="tabs-bar"></div>
+  <div id="tab-content"><div class="loading">Loading designers...</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────
+const SCRIPT_URL = 'PLACEHOLDER_URL';
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+// ── STATE ───────────────────────────────────────────────────────
+let designers = [];   // { id, name, email }
+let entries   = [];   // { id, designerId, designerName, month, monthLabel, ... }
+let activeTab = null; // designer name or 'team'
+
+// ── API ─────────────────────────────────────────────────────────
+async function api(action, payload = {}) {
+  try {
+    const r = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action, ...payload })
+    });
+    return await r.json();
+  } catch (e) {
+    console.error('API error:', e);
+    return null;
+  }
+}
+
+// ── INIT ────────────────────────────────────────────────────────
+async function init() {
+  const d = await api('getAll');
+  if (!d || !d.ok) {
+    document.getElementById('tab-content').innerHTML =
+      '<div class="loading">Could not connect to database. Check Apps Script setup.</div>';
+    return;
+  }
+  designers = d.designers || [];
+  entries   = d.entries   || [];
+
+  // Build month dropdown value for prior month
+  const now   = new Date();
+  const prior = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const defaultMonth = `${prior.getFullYear()}-${String(prior.getMonth()+1).padStart(2,'0')}`;
+
+  renderTabs(defaultMonth);
+  document.getElementById('hdr-status').textContent = `${designers.length} designers`;
+}
+
+// ── TABS ────────────────────────────────────────────────────────
+function renderTabs(defaultMonth) {
+  const bar = document.getElementById('tabs-bar');
+  const tabs = [...designers.map(d => d.name), 'team'];
+  activeTab = activeTab || (designers.length ? designers[0].name : 'team');
+
+  bar.innerHTML = tabs.map(t =>
+    `<div class="tab${t === activeTab ? ' active' : ''}" onclick="switchTab('${escAttr(t)}', '${defaultMonth}')">${t === 'team' ? 'Team overview' : t}</div>`
+  ).join('');
+
+  renderTabContent(activeTab, defaultMonth);
+}
+
+function switchTab(name, defaultMonth) {
+  activeTab = name;
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    const tabs = [...designers.map(d => d.name), 'team'];
+    el.classList.toggle('active', tabs[i] === name);
+  });
+  renderTabContent(name, defaultMonth);
+}
+
+// ── TAB CONTENT ─────────────────────────────────────────────────
+function renderTabContent(name, defaultMonth) {
+  if (name === 'team') {
+    renderTeam();
+    return;
+  }
+  const designer = designers.find(d => d.name === name);
+  if (!designer) return;
+  renderDesignerTab(designer, defaultMonth);
+}
+
+// ── DESIGNER TAB ─────────────────────────────────────────────────
+function renderDesignerTab(designer, defaultMonth) {
+  const now = new Date();
+  const monthOptions = [];
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 2; y--) {
+    const end = (y === now.getFullYear()) ? now.getMonth() : 11;
+    for (let m = end; m >= 0; m--) {
+      const val = `${y}-${String(m+1).padStart(2,'0')}`;
+      const label = `${MONTHS[m]} ${y}`;
+      monthOptions.push({ val, label });
+    }
+  }
+
+  const selMonth = defaultMonth || monthOptions[0]?.val || '';
+  const existingEntry = entries.find(e => e.designerId === designer.id && e.month === selMonth);
+  const e = existingEntry || {};
+
+  // Designer history
+  const dEntries = entries
+    .filter(en => en.designerId === designer.id)
+    .sort((a, b) => b.month.localeCompare(a.month));
+
+  const totalInc = dEntries.reduce((s, en) => s + (en.incentiveAmount || 0), 0);
+  const avgRate  = dEntries.length
+    ? Math.round(dEntries.reduce((s, en) => s + (en.assigned > 0 ? (en.published / en.assigned) * 100 : 0), 0) / dEntries.length)
+    : 0;
+
+  document.getElementById('tab-content').innerHTML = `
+    <!-- ENTRY FORM -->
+    <div class="card">
+      <div class="card-title">Session — ${esc(designer.name)}</div>
+      <div class="setup-row">
+        <div>
+          <label>Month being reviewed</label>
+          <select id="sel-month" onchange="onMonthChange('${designer.id}')">
+            ${monthOptions.map(o => `<option value="${o.val}"${o.val === selMonth ? ' selected' : ''}>${o.label}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Designer email</label>
+          <input type="email" id="inp-email" value="${esc(designer.email || e.email || '')}" placeholder="designer@example.com" />
+          <div class="field-hint">Saved to designer record on each save</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Numbers for the month</div>
+      <div class="metrics-grid">
+        <div>
+          <label>Sites assigned</label>
+          <input type="number" id="inp-assigned" min="0" value="${e.assigned || 0}" oninput="recalc()" />
+          <div class="field-hint">Total jobs received</div>
+        </div>
+        <div>
+          <label>Sites published</label>
+          <input type="number" id="inp-published" min="0" value="${e.published || 0}" oninput="recalc()" />
+          <div class="field-hint">Live and approved</div>
+        </div>
+        <div>
+          <label>Cancellations</label>
+          <input type="number" id="inp-cancelled" min="0" value="${e.cancelled || 0}" oninput="recalc()" />
+          <div class="field-hint">Jobs cancelled</div>
+        </div>
+        <div>
+          <label>Referrals to sales</label>
+          <input type="number" id="inp-referrals" min="0" value="${e.referrals || 0}" oninput="recalc()" />
+          <div class="field-hint">Happy clients passed on</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Performance snapshot</div>
+      <div class="stats-row">
+        <div class="stat-chip">
+          <div class="stat-num" id="s-rate" style="color:var(--purple)">0%</div>
+          <div class="stat-name">Publish rate</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" id="s-cancel" style="color:#e74c3c">0</div>
+          <div class="stat-name">Cancellations</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" id="s-refs" style="color:var(--blue)">0</div>
+          <div class="stat-name">Referrals</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" id="s-prog" style="color:var(--muted)">0</div>
+          <div class="stat-name">In progress</div>
+        </div>
+      </div>
+      <div class="progress-row">
+        <div class="progress-meta">
+          <span id="prog-left">0 of 0 published</span>
+          <span>50% benchmark</span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" id="bar" style="width:0%;background:#c0c3d4"></div>
+          <div class="bar-marker"></div>
+        </div>
+        <div class="progress-foot">
+          <span id="prog-status"></span>
+          <span>target: 50%</span>
+        </div>
+      </div>
+      <div class="incentive-box off" id="inc-box">
+        <div>
+          <div class="inc-label"  id="inc-label">Monthly incentive</div>
+          <div class="inc-amount" id="inc-amount">$0</div>
+          <div class="inc-note"   id="inc-note">Publish at least 50% of assigned sites to qualify</div>
+        </div>
+        <div class="badge neutral" id="inc-badge">Not qualified</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">1:1 notes</div>
+      <label>Discussion notes for this session</label>
+      <textarea id="inp-notes" rows="4" placeholder="Key feedback, goals for next month, blockers, wins...">${esc(e.notes || '')}</textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1.5rem">
+      <button class="btn-save" id="btn-save" onclick="saveEntry(${designer.id},'${escAttr(designer.name)}')">Save this month's entry</button>
+      <button class="btn-email" id="btn-email" onclick="emailDesigner(${designer.id},'${escAttr(designer.name)}')">Email summary to designer</button>
+    </div>
+
+    <!-- HISTORY -->
+    ${dEntries.length ? `
+    <div class="card">
+      <div class="card-title">History — ${esc(designer.name)}</div>
+      <div class="summary-grid">
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--oxford)">${dEntries.length}</div>
+          <div class="stat-name">Months tracked</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--purple)">${avgRate}%</div>
+          <div class="stat-name">Avg publish rate</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--turquoise);font-size:1.4rem">$${totalInc.toLocaleString()}</div>
+          <div class="stat-name">Total incentives</div>
+        </div>
+      </div>
+      ${dEntries.map(en => {
+        const rate   = en.assigned > 0 ? Math.round((en.published / en.assigned) * 100) : 0;
+        const inc    = en.incentiveAmount || 0;
+        return `<div class="hist-item">
+          <div>
+            <div class="hist-month">${esc(en.monthLabel)}</div>
+            <div class="hist-meta">${en.assigned} assigned &middot; ${en.published} published &middot; ${en.cancelled} cancelled &middot; ${en.referrals} referrals</div>
+            ${en.notes ? `<div class="hist-notes">"${esc(en.notes.slice(0,120))}${en.notes.length>120?'…':''}"</div>` : ''}
+          </div>
+          <div>
+            <div class="hist-incentive ${inc > 0 ? 'earned' : 'zero'}">${inc > 0 ? '$'+inc.toLocaleString() : '—'}</div>
+            <div class="hist-rate">${rate}% publish rate</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+  `;
+
+  recalc();
+  updateHeader();
+}
+
+// ── MONTH CHANGE ─────────────────────────────────────────────────
+function onMonthChange(designerId) {
+  const sel = document.getElementById('sel-month');
+  const month = sel.value;
+  const designer = designers.find(d => d.id === Number(designerId));
+  if (!designer) return;
+
+  const existing = entries.find(e => e.designerId === designer.id && e.month === month);
+  const en = existing || {};
+  document.getElementById('inp-assigned').value  = en.assigned  || 0;
+  document.getElementById('inp-published').value = en.published || 0;
+  document.getElementById('inp-cancelled').value = en.cancelled || 0;
+  document.getElementById('inp-referrals').value = en.referrals || 0;
+  document.getElementById('inp-notes').value     = en.notes     || '';
+  recalc();
+  updateHeader();
+}
+
+// ── RECALC ───────────────────────────────────────────────────────
+function recalc() {
+  const assigned  = parseInt(document.getElementById('inp-assigned')?.value)  || 0;
+  const published = parseInt(document.getElementById('inp-published')?.value) || 0;
+  const cancelled = parseInt(document.getElementById('inp-cancelled')?.value) || 0;
+  const refs      = parseInt(document.getElementById('inp-referrals')?.value) || 0;
+
+  const rate      = assigned > 0 ? Math.round((published / assigned) * 100) : 0;
+  const inProg    = Math.max(0, assigned - published - cancelled);
+  const qualifies = assigned > 0 && published >= Math.ceil(assigned * 0.5);
+  const incentive = qualifies ? published * 10 : 0;
+  const needed    = Math.max(0, Math.ceil(assigned * 0.5) - published);
+
+  document.getElementById('s-rate').textContent   = rate + '%';
+  document.getElementById('s-rate').style.color   = rate >= 50 ? 'var(--purple)' : '#e74c3c';
+  document.getElementById('s-cancel').textContent = cancelled;
+  document.getElementById('s-refs').textContent   = refs;
+  document.getElementById('s-prog').textContent   = inProg;
+
+  const bar = document.getElementById('bar');
+  bar.style.width      = Math.min(rate, 100) + '%';
+  bar.style.background = rate >= 50 ? 'var(--turquoise)' : rate >= 35 ? 'var(--blue)' : '#e74c3c';
+
+  document.getElementById('prog-left').textContent =
+    assigned > 0 ? `${published} of ${assigned} published` : '0 of 0 published';
+  document.getElementById('prog-status').textContent =
+    assigned > 0 ? (qualifies ? 'Benchmark met' : `${needed} more needed to hit 50%`) : '';
+
+  const box   = document.getElementById('inc-box');
+  const badge = document.getElementById('inc-badge');
+  if (qualifies) {
+    box.className = 'incentive-box on';
+    document.getElementById('inc-label').textContent  = 'Monthly incentive earned';
+    document.getElementById('inc-amount').textContent = '$' + incentive.toLocaleString();
+    document.getElementById('inc-note').textContent   = `${published} published × $10 per site`;
+    badge.className   = 'badge yes';
+    badge.textContent = 'Qualified';
+  } else {
+    box.className = 'incentive-box off';
+    document.getElementById('inc-label').textContent  = 'Monthly incentive';
+    document.getElementById('inc-amount').textContent = '$0';
+    document.getElementById('inc-note').textContent   =
+      assigned > 0 ? `Publish ${needed} more site${needed!==1?'s':''} to qualify`
+                   : 'Publish at least 50% of assigned sites to qualify';
+    badge.className   = 'badge no';
+    badge.textContent = 'Not qualified';
+  }
+}
+
+// ── SAVE ENTRY ───────────────────────────────────────────────────
+async function saveEntry(designerId, designerName) {
+  const btn = document.getElementById('btn-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  const selEl     = document.getElementById('sel-month');
+  const month     = selEl.value;
+  const monthLabel = selEl.options[selEl.selectedIndex]?.text || month;
+  const email     = document.getElementById('inp-email').value.trim();
+
+  const payload = {
+    designerId,
+    designerName,
+    month,
+    monthLabel,
+    email,
+    assigned:  parseInt(document.getElementById('inp-assigned').value)  || 0,
+    published: parseInt(document.getElementById('inp-published').value) || 0,
+    cancelled: parseInt(document.getElementById('inp-cancelled').value) || 0,
+    referrals: parseInt(document.getElementById('inp-referrals').value) || 0,
+    notes:     document.getElementById('inp-notes').value.trim()
+  };
+
+  const res = await api('saveEntry', payload);
+  if (res && res.ok) {
+    // Update local state
+    const idx = entries.findIndex(e => e.designerId === designerId && e.month === month);
+    const qualifies = payload.assigned > 0 && payload.published >= Math.ceil(payload.assigned * 0.5);
+    const newEntry = {
+      ...payload,
+      id: res.id,
+      incentiveQualified: qualifies,
+      incentiveAmount: qualifies ? payload.published * 10 : 0,
+      savedAt: new Date().toISOString()
+    };
+    if (idx >= 0) entries[idx] = newEntry;
+    else entries.push(newEntry);
+
+    // Update designer email in local state
+    if (email) {
+      const d = designers.find(d => d.id === designerId);
+      if (d) d.email = email;
+    }
+
+    toast(`Saved — ${designerName}, ${monthLabel}`);
+    // Re-render to refresh history
+    const now = new Date();
+    const prior = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const defaultMonth = `${prior.getFullYear()}-${String(prior.getMonth()+1).padStart(2,'0')}`;
+    renderDesignerTab(designers.find(d => d.id === designerId), month);
+  } else {
+    toast('Save failed — ' + (res?.err || 'no response'));
+    if (btn) { btn.disabled = false; btn.textContent = "Save this month's entry"; }
+  }
+}
+
+// ── EMAIL DESIGNER ───────────────────────────────────────────────
+async function emailDesigner(designerId, designerName) {
+  const btn   = document.getElementById('btn-email');
+  const email = document.getElementById('inp-email').value.trim();
+  if (!email) { toast('Enter designer email first'); return; }
+
+  const selEl      = document.getElementById('sel-month');
+  const monthLabel = selEl.options[selEl.selectedIndex]?.text || selEl.value;
+  const assigned   = parseInt(document.getElementById('inp-assigned').value)  || 0;
+  const published  = parseInt(document.getElementById('inp-published').value) || 0;
+  const cancelled  = parseInt(document.getElementById('inp-cancelled').value) || 0;
+  const referrals  = parseInt(document.getElementById('inp-referrals').value) || 0;
+  const notes      = document.getElementById('inp-notes').value.trim();
+
+  const rate      = assigned > 0 ? Math.round((published / assigned) * 100) : 0;
+  const qualifies = assigned > 0 && published >= Math.ceil(assigned * 0.5);
+  const incentive = qualifies ? published * 10 : 0;
+  const needed    = Math.max(0, Math.ceil(assigned * 0.5) - published);
+  const inProg    = Math.max(0, assigned - published - cancelled);
+  const firstName = designerName.split(' ')[0];
+
+  const subject = `ZING — Your ${monthLabel} Performance Summary`;
+  const text = [
+    `Hi ${firstName},`,
+    ``,
+    `Here's your performance summary for ${monthLabel}:`,
+    ``,
+    `─────────────────────────`,
+    `YOUR NUMBERS`,
+    `─────────────────────────`,
+    `Sites assigned:     ${assigned}`,
+    `Sites published:    ${published}`,
+    `In progress:        ${inProg}`,
+    `Cancellations:      ${cancelled}`,
+    `Referrals to sales: ${referrals}`,
+    ``,
+    `Publish rate: ${rate}% ${rate >= 50 ? '(benchmark met!)' : `(benchmark is 50% — ${needed} more site${needed!==1?'s':''} would have qualified)`}`,
+    ``,
+    `─────────────────────────`,
+    `MONTHLY INCENTIVE`,
+    `─────────────────────────`,
+    qualifies
+      ? `You qualified! ${published} published × $10 = $${incentive.toLocaleString()} incentive earned.`
+      : `Not qualified this month — you needed ${needed} more published site${needed!==1?'s':''} to hit the 50% threshold.`,
+    ``,
+    ...(notes ? [
+      `─────────────────────────`,
+      `1:1 NOTES`,
+      `─────────────────────────`,
+      notes,
+      ``
+    ] : []),
+    `─────────────────────────`,
+    ``,
+    `Keep up the great work — any questions just reply to this email.`,
+    ``,
+    `Amy`,
+    `Founder & CEO, ZING`,
+  ].join('\n');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  const res = await api('sendEmail', { to: email, subject, text });
+  if (res && res.ok) {
+    toast(`Email sent to ${email}`);
+  } else {
+    toast('Email failed — ' + (res?.err || 'no response'));
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Email summary to designer'; }
+}
+
+// ── TEAM OVERVIEW ─────────────────────────────────────────────────
+function renderTeam() {
+  if (!designers.length) {
+    document.getElementById('tab-content').innerHTML =
+      '<div class="card"><div class="empty-state">No designers yet</div></div>';
+    return;
+  }
+
+  const rows = designers.map(d => {
+    const dEntries = entries.filter(e => e.designerId === d.id).sort((a,b) => b.month.localeCompare(a.month));
+    const latest   = dEntries[0];
+    if (!latest) return { name: d.name, noData: true };
+    const rate   = latest.assigned > 0 ? Math.round((latest.published / latest.assigned) * 100) : 0;
+    return { name: d.name, latest, rate, qualif: latest.incentiveQualified, inc: latest.incentiveAmount || 0 };
+  }).sort((a, b) => (b.rate || 0) - (a.rate || 0));
+
+  const totalPaid = entries.reduce((s, e) => s + (e.incentiveAmount || 0), 0);
+  const now = new Date();
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const priorMonth = (() => { const p = new Date(now.getFullYear(), now.getMonth()-1,1); return `${p.getFullYear()}-${String(p.getMonth()+1).padStart(2,'0')}`; })();
+
+  document.getElementById('tab-content').innerHTML = `
+    <div class="card">
+      <div class="card-title">Team overview</div>
+      ${rows.map(r => r.noData ? `
+        <div class="team-row">
+          <div><div class="team-name">${esc(r.name)}</div><div class="team-stat">No entries yet</div></div>
+          <div class="team-right"><div class="badge neutral">No data</div></div>
+        </div>` : `
+        <div class="team-row">
+          <div>
+            <div class="team-name">${esc(r.name)}</div>
+            <div class="team-stat">${esc(r.latest.monthLabel)} &middot; ${r.latest.published}/${r.latest.assigned} published &middot; ${r.rate}% rate &middot; ${r.latest.referrals} referrals</div>
+          </div>
+          <div class="team-right">
+            <div class="badge ${r.qualif ? 'yes' : 'no'}">${r.qualif ? 'Qualified' : 'Not qualified'}</div>
+            <div class="team-inc ${r.inc > 0 ? 'pos' : 'zero'}">${r.inc > 0 ? '$'+r.inc.toLocaleString() : '—'}</div>
+          </div>
+        </div>`
+      ).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title">All-time totals</div>
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--oxford)">${entries.length}</div>
+          <div class="stat-name">Total entries</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--turquoise);font-size:1.4rem">$${totalPaid.toLocaleString()}</div>
+          <div class="stat-name">Total incentives paid</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-num" style="color:var(--purple)">${designers.length}</div>
+          <div class="stat-name">Designers tracked</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('hdr-month').textContent = 'Team';
+  document.getElementById('hdr-status').textContent = `${designers.length} designers`;
+}
+
+// ── UPDATE HEADER ─────────────────────────────────────────────────
+function updateHeader() {
+  const selEl = document.getElementById('sel-month');
+  if (selEl) {
+    document.getElementById('hdr-month').textContent = selEl.options[selEl.selectedIndex]?.text || '—';
+  }
+  document.getElementById('hdr-status').textContent = activeTab === 'team' ? 'Team overview' : activeTab || '—';
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  setTimeout(() => { t.className = 'toast'; }, 2800);
+}
+
+// ── START ─────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
