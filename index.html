@@ -511,9 +511,10 @@ function renderDesignerTab(designer, defaultMonth) {
             <div class="hist-meta">${en.assigned} assigned &middot; ${en.published} published &middot; ${en.cancelled} cancelled &middot; ${en.referrals} referrals</div>
             ${en.notes ? `<div class="hist-notes">"${esc(en.notes.slice(0,120))}${en.notes.length>120?'…':''}"</div>` : ''}
           </div>
-          <div>
+          <div style="text-align:right">
             <div class="hist-incentive ${inc > 0 ? 'earned' : 'zero'}">${inc > 0 ? '$'+inc.toLocaleString() : '—'}</div>
             <div class="hist-rate">${rate}% publish rate</div>
+            <button onclick="deleteEntry(${en.id}, ${designer.id}, '${escAttr(designer.name)}')" style="margin-top:0.5rem;background:none;border:none;color:#c0c3d4;font-size:0.7rem;cursor:pointer;padding:0" onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#c0c3d4'">Delete</button>
           </div>
         </div>`;
       }).join('')}
@@ -716,6 +717,23 @@ async function emailDesigner(designerId, designerName) {
     toast('Email failed — ' + (res?.err || 'no response'));
   }
   if (btn) { btn.disabled = false; btn.textContent = 'Email summary to designer'; }
+}
+
+// ── DELETE ENTRY ─────────────────────────────────────────────────
+async function deleteEntry(entryId, designerId, designerName) {
+  if (!confirm('Delete this entry?')) return;
+  const res = await api('deleteEntryById', { id: entryId });
+  if (res && res.ok) {
+    entries = entries.filter(e => e.id !== entryId);
+    toast('Entry deleted');
+    const designer = designers.find(d => d.id === designerId);
+    const now = new Date();
+    const prior = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const defaultMonth = `${prior.getFullYear()}-${String(prior.getMonth()+1).padStart(2,'0')}`;
+    renderDesignerTab(designer, defaultMonth);
+  } else {
+    toast('Delete failed — ' + (res?.err || 'no response'));
+  }
 }
 
 // ── TEAM OVERVIEW ─────────────────────────────────────────────────

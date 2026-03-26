@@ -3,9 +3,11 @@
 //  Deploy as: Web App → Execute as: Me → Access: Anyone
 // ═══════════════════════════════════════════════════════════════
 
-const SMTP2GO_KEY  = 'api-AE40C393800A4987AC3448286D2031C2';
-const FROM_EMAIL   = 'amy@zing-work.com';
-const FROM_NAME    = 'Amy at ZING';
+const SMTP2GO_KEY     = 'api-AE40C393800A4987AC3448286D2031C2';
+const FROM_EMAIL      = 'CHATBOT@zing-work.com';
+const FROM_NAME       = 'Halle at ZING';
+const REPLY_TO        = 'halle@zing-work.com';
+const SPREADSHEET_ID  = '1Ey_UECpFc8Df-zCZk4yqCerAjd53tLxjaYK7z01HvzA';
 
 const SHEETS = { designers: 'Designers', entries: 'Entries' };
 
@@ -26,6 +28,8 @@ function doPost(e) {
     else if (action === 'saveDesigner')  result = handleSaveDesigner(body);
     else if (action === 'saveEntry')     result = handleSaveEntry(body);
     else if (action === 'sendEmail')     result = handleSendEmail(body);
+    else if (action === 'deleteEntry')    result = handleDeleteEntry(body);
+    else if (action === 'deleteEntryById') result = handleDeleteEntryById(body);
     else                                 result = { ok: false, err: 'Unknown action: ' + action };
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -39,7 +43,7 @@ function doPost(e) {
 
 // ── SHEET HELPERS ──────────────────────────────────────────────
 function getSheet(name) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
   return sh;
@@ -50,7 +54,22 @@ function sheetToObjects(sh, headers) {
   if (data.length <= 1) return [];
   return data.slice(1).map(row => {
     const obj = {};
-    headers.forEach((h, i) => obj[h] = row[i]);
+    headers.forEach((h, i) => {
+      const v = row[i];
+      // Prevent Google Sheets Date auto-conversion on string fields
+      if (v instanceof Date) {
+        if (h === 'month') {
+          obj[h] = `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}`;
+        } else if (h === 'monthLabel') {
+          const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          obj[h] = `${MONTHS[v.getMonth()]} ${v.getFullYear()}`;
+        } else {
+          obj[h] = v.toISOString();
+        }
+      } else {
+        obj[h] = v;
+      }
+    });
     return obj;
   });
 }
@@ -76,6 +95,8 @@ function handleInit() {
     eSh.appendRow(['id', 'designerId', 'designerName', 'month', 'monthLabel',
       'assigned', 'published', 'cancelled', 'referrals', 'notes',
       'incentiveQualified', 'incentiveAmount', 'savedAt']);
+    // Force month columns to text to prevent date auto-conversion
+    eSh.getRange('D:E').setNumberFormat('@');
   }
 
   // Seed Jorden and Tina if no designers exist
@@ -202,6 +223,39 @@ function handleSaveEntry(body) {
   return { ok: true, id };
 }
 
+// ── DELETE ENTRY ────────────────────────────────────────────────
+function handleDeleteEntry(body) {
+  const sh   = getSheet(SHEETS.entries);
+  const data = sh.getDataRange().getValues();
+  // Delete rows where month column doesn't match YYYY-MM format
+  // Go backwards to avoid row index shifting
+  let deleted = 0;
+  for (let i = data.length - 1; i >= 1; i--) {
+    const monthVal = String(data[i][3]); // column D = month
+    const isClean  = /^\d{4}-\d{2}$/.test(monthVal);
+    if (!isClean) {
+      sh.deleteRow(i + 1);
+      deleted++;
+    }
+  }
+  return { ok: true, deleted };
+}
+
+// ── DELETE ENTRY BY ID ──────────────────────────────────────────
+function handleDeleteEntryById(body) {
+  const { id } = body;
+  if (!id) return { ok: false, err: 'Missing id' };
+  const sh   = getSheet(SHEETS.entries);
+  const data = sh.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (Number(data[i][0]) === Number(id)) {
+      sh.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  return { ok: false, err: 'Entry not found' };
+}
+
 // ── SEND EMAIL ──────────────────────────────────────────────────
 function handleSendEmail(body) {
   const { to, subject, text } = body;
@@ -211,6 +265,7 @@ function handleSendEmail(body) {
     api_key:   SMTP2GO_KEY,
     to:        [to],
     sender:    `${FROM_NAME} <${FROM_EMAIL}>`,
+    reply_to:  REPLY_TO,
     subject:   subject,
     text_body: text
   };
